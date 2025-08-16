@@ -1,20 +1,22 @@
 import os
 
 from core.data_integrator import DataIntegrator
-from utils.file_utils import create_dir_if_not_exists
+from utils.generate_sample_files import generate_sample_files
 
 
 def main():
+    
+    # 生成样本文件
+    output_dir = r'2024苏家屯\0628\多光谱'
+    generate_sample_files(output_dir)
+
     # 设置输入和输出路径
     data_files = [
-        {'path': 'input/result.csv', 'type': 'csv'},
-        {'path': 'input/result.shp', 'type': 'shp'},
-        {'path': 'input/result.xlsx', 'type': 'excel'},
-        {'path': 'input/result.geojson', 'type': 'geojson'},
+        {'path': r'2024苏家屯\0628\多光谱\result_index.csv', 'type': 'csv'},
+        {'path': r'2024苏家屯\0628\多光谱\result_index.shp', 'type': 'shp'},
+        {'path': r'2024苏家屯\0628\多光谱\result_index.xlsx', 'type': 'excel'},
+        {'path': r'2024苏家屯\0628\多光谱\result_index.geojson', 'type': 'geojson'},
     ]
-
-    # 创建输出目录
-    create_dir_if_not_exists('output')
     
     try:
         # 初始化数据集成器
@@ -39,10 +41,10 @@ def main():
         
         output = []
         # 导出数据
-        output.append(('output/result.csv', 'csv'))
-        output.append(('output/result.geojson', 'geojson'))
-        output.append(('output/result.xlsx', 'excel'))
-        output.append(('output/result1.shp', 'shp'))
+        output.append((r'2024苏家屯\0628\多光谱\result.csv', 'csv'))
+        output.append((r'2024苏家屯\0628\多光谱\result.geojson', 'geojson'))
+        output.append((r'2024苏家屯\0628\多光谱\result.xlsx', 'excel'))
+        output.append((r'2024苏家屯\0628\多光谱\result.shp', 'shp'))
 
         for output_path, output_type in output:
             success = integrator.export_data(output_path, output_type)

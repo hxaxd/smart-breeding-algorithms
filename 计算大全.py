@@ -1,7 +1,6 @@
 import numpy as np
 
 from core.multi_raster_analyzer import MultiRasterAnalyzer
-from utils.file_utils import create_dir_if_not_exists
 
 from utils.stats_utils import (
     calculate_mean,
@@ -22,23 +21,21 @@ from utils.stats_utils import (
 def main():
     # 设置输入和输出路径
     tif_paths = [
-        ('red', 'input/red.tif'),  # 红光波段TIF文件路径
-        ('nir', 'input/nir.tif'),  # 近红外波段TIF文件路径
-        # ('green', 'input/green_band.tif'),  # 绿光波段TIF文件路径
-        # ('blue', 'input/blue_band.tif'),  # 蓝光波段TIF文件路径
-        # ('rededge', 'input/rededge_band.tif'),  # 红边波段TIF文件路径
-        # ('RGB', 'input/RGB_band.tif'),  # 可见光TIF文件路径
-        # ('HRGB', 'input/HRGB_band.tif'),  # 高清晰度RGBTIF文件路径
-        # ('rededge1', 'input/rededge1_band.tif'),  # 红边1波段TIF文件路径
-        # ('rededge2', 'input/rededge2_band.tif'),  # 红边2波段TIF文件路径
-        # ('rededge3', 'input/rededge3_band.tif'),  # 红边3波段TIF文件路径
-        # ('swir1', 'input/swir1_band.tif'),  # 短波红外1波段TIF文件路径
-        # ('swir2', 'input/swir2_band.tif'),  # 短波红外2波段TIF文件路径
+        ('red', r'2024苏家屯\0628\多光谱\red.tif'),  # 红光波段TIF文件路径
+        ('nir', r'2024苏家屯\0628\多光谱\nir.tif'),  # 近红外波段TIF文件路径
+        # ('green', r'2024苏家屯\0628\多光谱\green.tif'),  # 绿光波段TIF文件路径
+        # ('blue', r'2024苏家屯\0628\多光谱\blue.tif'),  # 蓝光波段TIF文件路径
+        # ('rededge', r'2024苏家屯\0628\多光谱\rededge.tif'),  # 红边波段TIF文件路径
+        # ('rgb', r'2024苏家屯\0628\多光谱\rgb.tif'),  # 可见光TIF文件路径
+        # ('hrgb', r'2024苏家屯\0628\可见光\hrgb.tif'),  # 高清晰度RGBTIF文件路径
+        # ('dsm', r'2024苏家屯\0628\可见光\dsm.tif'), # 高程TIF文件路径
+        # ('rededge1', r'2024苏家屯\0628\多光谱\rededge1.tif'),  # 红边1波段TIF文件路径
+        # ('rededge2', r'2024苏家屯\0628\多光谱\rededge2.tif'),  # 红边2波段TIF文件路径
+        # ('rededge3', r'2024苏家屯\0628\多光谱\rededge3.tif'),  # 红边3波段TIF文件路径
+        # ('swir1', r'2024苏家屯\0628\多光谱\swir1.tif'),  # 短波红外1波段TIF文件路径
+        # ('swir2', r'2024苏家屯\0628\多光谱\swir2.tif'),  # 短波红外2波段TIF文件路径
     ]
-    shp_path = 'input/result.shp'  # 替换为实际的shapefile路径
-    
-    # 创建输出目录
-    create_dir_if_not_exists('output')
+    shp_path = r'2024苏家屯\0628\多光谱\shape.shp'  # 替换为实际的shapefile路径
     
     try:
         # 初始化分析器
@@ -55,11 +52,11 @@ def main():
             nir = tile_data['nir']
             # green = tile_data['green']
             # rededge = tile_data['rededge']
-            # rgb_r = tile_data['RGB'][0,:,:]
-            # rgb_g = tile_data['RGB'][1,:,:]
-            # rgb_b = tile_data['RGB'][2,:,:]
+            # rgb_r = tile_data['rgb'][0,:,:]
+            # rgb_g = tile_data['rgb'][1,:,:]
+            # rgb_b = tile_data['rgb'][2,:,:]
             # blue = tile_data['blue']
-            # hrgb = tile_data['HRGB']
+            # hrgb = tile_data['hrgb']
             # rededge1 = tile_data['rededge1']
             # rededge2 = tile_data['rededge2']
             # rededge3 = tile_data['rededge3']
@@ -149,8 +146,8 @@ def main():
         
         print(f"计算完成，共处理 {len(results)} 个区块")
         
-        analyzer.export_results_to_shapefile(results, 'output/result_index.shp')
-        print("结果已导出到output/result_index.shp")
+        analyzer.export_results_to_shapefile(results, r'2024苏家屯\0628\多光谱\result_index.shp')
+        print(r"结果已导出到2024苏家屯\0628\多光谱\result_index.shp")
         
     except Exception as e:
         print(f"处理过程中出错: {str(e)}")

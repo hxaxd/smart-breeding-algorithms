@@ -168,7 +168,6 @@ class MultiRasterAnalyzer:
                 if fid not in output_gdf['FID'].values:
                     continue
                 
-                
                 # 添加或更新字段
                 for key, value in item.items():
                     if key != 'FID':
