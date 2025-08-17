@@ -35,4 +35,17 @@ python examples.py # 修改为实际的示例文件名
 
 ## 使用说明
 
+- 惯用流程: 
+  - 分割小区, 产出 shape.shp 文件
+  - 根据 shape.shp 文件
+    - 分割小区 rgb 图像
+    - 计算小区数据, 产出 result_index.shp 文件
+  - 将其它来源数据 (支持 shp, xlsx, csv, geojson 格式) 与 result_index.shp 中的数据多源融合
+  - 导出 shp, xlsx, csv, geojson 格式 result 文件
+- 示例演示:
+  - `python 小区分割.py`
+  - `python 切割图像.py`
+  - `python 技术大全.py`
+  - `python 生成示例多源数据文件.py`
+  - `python 多源数据融合.py`
 - 运行示例见示例文件中的注释

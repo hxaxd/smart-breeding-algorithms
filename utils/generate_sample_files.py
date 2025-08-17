@@ -3,27 +3,30 @@ import csv
 import json
 
 
-def generate_sample_files(output_dir):
-    # 创建输出目录（如果不存在）
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # 定义要生成的记录数量
-    num_records = 1404
-    
-    # 生成CSV文件
-    csv_path = os.path.join(output_dir, 'sample.csv')
+def generate_csv(output_dir, num_records=1404):
+    """生成CSV文件"""
+    csv_path = os.path.join(output_dir, 'result_index.csv')
     with open(csv_path, 'w', newline='', encoding='utf-8') as csv_file:
         writer = csv.writer(csv_file)
-        # 写入表头
         writer.writerow(['FID', 'CSV'])
-        # 写入数据行
         for i in range(1, num_records + 1):
             writer.writerow([i, 'csv'])
-    print(f"成功生成CSV文件: {csv_path}")
-    
-    
-    # 生成真正的GeoJSON格式文件
-    real_geojson_path = os.path.join(output_dir, 'sample.geojson')
+    return csv_path
+
+
+def generate_xlsx(output_dir, num_records=1404):
+    """生成Excel文件"""
+    import pandas as pd
+    xlsx_path = os.path.join(output_dir, 'result_index.xlsx')
+    data = {'FID': range(1, num_records + 1), 'XLSX': ['xlsx'] * num_records}
+    df = pd.DataFrame(data)
+    df.to_excel(xlsx_path, index=False)
+    return xlsx_path
+
+
+def generate_geojson(output_dir, num_records=1404):
+    """生成GeoJSON文件"""
+    geojson_path = os.path.join(output_dir, 'result_index.geojson')
     features = []
     for i in range(1, num_records + 1):
         feature = {
@@ -34,7 +37,7 @@ def generate_sample_files(output_dir):
             },
             "geometry": {
                 "type": "Point",
-                "coordinates": [0, 0]  # 占位坐标
+                "coordinates": [0, 0]
             }
         }
         features.append(feature)
@@ -44,7 +47,8 @@ def generate_sample_files(output_dir):
         "features": features
     }
     
-    with open(real_geojson_path, 'w', encoding='utf-8') as geojson_file:
+    with open(geojson_path, 'w', encoding='utf-8') as geojson_file:
         json.dump(geojson_data, geojson_file, ensure_ascii=False, indent=2)
-    print(f"成功生成GeoJSON文件: {real_geojson_path}")
+    return geojson_path
+
 

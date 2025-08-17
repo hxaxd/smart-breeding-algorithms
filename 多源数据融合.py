@@ -1,21 +1,15 @@
-import os
-
 from core.data_integrator import DataIntegrator
-from utils.generate_sample_files import generate_sample_files
+
 
 
 def main():
-    
-    # 生成样本文件
-    output_dir = r'2024苏家屯\0628\多光谱'
-    generate_sample_files(output_dir)
 
     # 设置输入和输出路径
     data_files = [
         {'path': r'2024苏家屯\0628\多光谱\result_index.csv', 'type': 'csv'},
         {'path': r'2024苏家屯\0628\多光谱\result_index.shp', 'type': 'shp'},
         {'path': r'2024苏家屯\0628\多光谱\result_index.xlsx', 'type': 'excel'},
-        {'path': r'2024苏家屯\0628\多光谱\result_index.geojson', 'type': 'geojson'},
+        {'path': r'2024苏家屯\0628\多光谱\result_index.geojson', 'type': 'geojson'}, # 示例的geojson没有地理信息, 一定要放到最后面, 有地理信息就无所谓了
     ]
     
     try:
