@@ -115,13 +115,17 @@ class DataIntegrator:
             
             # 导出数据
             if output_type.lower() == 'csv':
-                merged_df.to_csv(output_path, index=False)
+                # 转换为GeoDataFrame后导出
+                gdf = gpd.GeoDataFrame(merged_df, geometry='geometry')
+                gdf.to_csv(output_path, index=False)
             elif output_type.lower() == 'geojson':
                 # 转换为GeoDataFrame后导出
                 gdf = gpd.GeoDataFrame(merged_df, geometry='geometry')
                 gdf.to_file(output_path, driver='GeoJSON')
             elif output_type.lower() == 'excel':
-                merged_df.to_excel(output_path, index=False)
+                # 转换为GeoDataFrame后导出
+                gdf = gpd.GeoDataFrame(merged_df, geometry='geometry')
+                gdf.to_excel(output_path, index=False)
             elif output_type.lower() == 'shp':
                 gdf = gpd.GeoDataFrame(merged_df, geometry='geometry')
                 gdf.to_file(output_path, driver='ESRI Shapefile')

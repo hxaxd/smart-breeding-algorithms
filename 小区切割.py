@@ -40,7 +40,7 @@ def main():
         )
         print(f"成功切割为 {len(tiles1)} 个区块")
     except Exception as e:
-        print(f"切割区块失败: {str(e)}")
+        print(f"切割区块1失败: {str(e)}")
         return
 
     geo_coords = [
@@ -62,7 +62,7 @@ def main():
         )
         print(f"成功切割为 {len(tiles2)} 个区块")
     except Exception as e:
-        print(f"切割区块失败: {str(e)}")
+        print(f"切割区块2失败: {str(e)}")
         return
 
     # 合并两个GeoDataFrame

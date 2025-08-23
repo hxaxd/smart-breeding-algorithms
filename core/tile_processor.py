@@ -122,14 +122,16 @@ class TileProcessor:
                 
                 # 创建多边形
                 polygon = Polygon(geo_rect)
+
+                current_id = 0
                     
                 # 根据顺序生成ID
                 if id_order == 'bottom-right':
                     # 从右下角开始编号
-                    current_id = start_id + m * n - (i * n + j)
+                    current_id = start_id + m * n - (j * m + i)
                 else:
                     # 从左上角开始编号
-                    current_id = start_id + i * n + j + 1
+                    current_id = start_id + j * m + i + 1
                     
                 tiles.append({
                     'FID': current_id,

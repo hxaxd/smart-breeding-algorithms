@@ -45,7 +45,7 @@ python examples.py # 修改为实际的示例文件名
 - 示例演示:
   - `python 小区分割.py`
   - `python 切割图像.py`
-  - `python 技术大全.py`
+  - `python 计算大全.py`
   - `python 生成示例多源数据文件.py`
   - `python 多源数据融合.py`
 - 运行示例见示例文件中的注释
