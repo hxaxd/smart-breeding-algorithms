@@ -2,7 +2,7 @@ from utils.generate_sample_files import generate_csv, generate_xlsx, generate_ge
    
 if __name__ == '__main__':   
     # 生成样本文件
-    output_dir = r'2024苏家屯\0628\多光谱'
+    output_dir = r'2024苏家屯\20240628\多光谱'
     
     # 生成CSV文件
     csv_path = generate_csv(output_dir, num_records=1404)

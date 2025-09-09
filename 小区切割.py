@@ -1,12 +1,13 @@
 from core.tile_processor import TileProcessor
 import pandas as pd
+from config.geo import sujiatun2024
 
 
-def main():
+def main(time: str):
 
     # 设置输入和输出路径
-    tif_path = r"2024苏家屯\0628\多光谱\rgb.tif"  # 替换为实际的TIF文件路径
-    output_shp = r"2024苏家屯\0628\多光谱\shape.shp" # 替换为期望的输出文件名
+    tif_path = rf"2024苏家屯\2024{time}\rgb.tif"  # 替换为实际的TIF文件路径
+    output_shp = rf"2024苏家屯\2024{time}\shape.shp" # 替换为期望的输出文件名
     
     # 初始化TileProcessor
     try:
@@ -18,14 +19,7 @@ def main():
         print(f"初始化TileProcessor失败: {str(e)}")
         return
     
-    # 定义四个地理坐标点（示例坐标，请根据实际数据修改）
-    # 这些点应该形成一个四边形区域
-    geo_coords = [
-        (123.30425725, 41.64233339),  # 西北
-        (123.30442390, 41.64232080),  # 东北
-        (123.304318616, 41.641444947), # 东南
-        (123.30415355, 41.64145984),   # 西南
-    ]
+    geo_coords = sujiatun2024[f"{time}1"]
     
     # 使用二维归一化切割区块
     try:
@@ -43,12 +37,7 @@ def main():
         print(f"切割区块1失败: {str(e)}")
         return
 
-    geo_coords = [
-        (123.3041535, 41.6414598),   # 西北
-        (123.3042756, 41.6414472),  # 东北
-        (123.3041917, 41.6407102), # 东南
-        (123.3040586, 41.6407197),  # 西南
-    ]
+    geo_coords = sujiatun2024[f"{time}2"]
 
     try:
         tiles2 = processor.split_tiles(
@@ -83,4 +72,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main("0927")

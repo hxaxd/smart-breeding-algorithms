@@ -6,10 +6,10 @@ def main():
 
     # 设置输入和输出路径
     data_files = [
-        {'path': r'2024苏家屯\0628\多光谱\result_index.csv', 'type': 'csv'},
-        {'path': r'2024苏家屯\0628\多光谱\result_index.shp', 'type': 'shp'},
-        {'path': r'2024苏家屯\0628\多光谱\result_index.xlsx', 'type': 'excel'},
-        {'path': r'2024苏家屯\0628\多光谱\result_index.geojson', 'type': 'geojson'}, # 示例的geojson没有地理信息, 一定要放到最后面, 有地理信息就无所谓了
+        {'path': r'2024苏家屯\20240628\result_index.csv', 'type': 'csv'},
+        {'path': r'2024苏家屯\20240628\result_index.shp', 'type': 'shp'},
+        {'path': r'2024苏家屯\20240628\result_index.xlsx', 'type': 'excel'},
+        {'path': r'2024苏家屯\20240628\result_index.geojson', 'type': 'geojson'}, # 示例的geojson没有地理信息, 一定要放到最后面, 有地理信息就无所谓了
     ]
     
     try:
@@ -35,10 +35,10 @@ def main():
         
         output = []
         # 导出数据
-        output.append((r'2024苏家屯\0628\多光谱\result.csv', 'csv'))
-        output.append((r'2024苏家屯\0628\多光谱\result.geojson', 'geojson'))
-        output.append((r'2024苏家屯\0628\多光谱\result.xlsx', 'excel'))
-        output.append((r'2024苏家屯\0628\多光谱\result.shp', 'shp'))
+        output.append((r'2024苏家屯\20240628\result.csv', 'csv'))
+        output.append((r'2024苏家屯\20240628\result.geojson', 'geojson'))
+        output.append((r'2024苏家屯\20240628\result.xlsx', 'excel'))
+        output.append((r'2024苏家屯\20240628\result.shp', 'shp'))
 
         for output_path, output_type in output:
             success = integrator.export_data(output_path, output_type)

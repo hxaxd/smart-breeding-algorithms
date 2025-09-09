@@ -9,9 +9,9 @@ def main():
 
     # 设置输入和输出路径
     tif_paths = [
-        ('rgb', r'2024苏家屯\0628\多光谱\rgb.tif')
+        ('rgb', r'2024苏家屯\20240628\rgb.tif')
     ]
-    shp_path = r'2024苏家屯\0628\多光谱\shape.shp'  # 替换为实际的shapefile路径
+    shp_path = r'2024苏家屯\20240628\shape.shp'  # 替换为实际的shapefile路径
     
     
     try:
@@ -23,7 +23,7 @@ def main():
         print("开始提取区块图像数据...")
         for tile_id, tile_data in analyzer.iterate_tiles():
             # 为每个区块创建子目录
-            tile_dir = os.path.join(r'2024苏家屯\0628\多光谱\tile', f"tile_{tile_id}")
+            tile_dir = os.path.join(r'2024苏家屯\20240628\tile', f"tile_{tile_id}")
             create_dir_if_not_exists(tile_dir)
             
             for name, data in tile_data.items():

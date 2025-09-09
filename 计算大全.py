@@ -21,21 +21,21 @@ from utils.stats_utils import (
 def main():
     # 设置输入和输出路径
     tif_paths = [
-        ('red', r'2024苏家屯\0628\多光谱\red.tif'),  # 红光波段TIF文件路径
-        ('nir', r'2024苏家屯\0628\多光谱\nir.tif'),  # 近红外波段TIF文件路径
-        # ('green', r'2024苏家屯\0628\多光谱\green.tif'),  # 绿光波段TIF文件路径
-        # ('blue', r'2024苏家屯\0628\多光谱\blue.tif'),  # 蓝光波段TIF文件路径
-        # ('rededge', r'2024苏家屯\0628\多光谱\rededge.tif'),  # 红边波段TIF文件路径
-        # ('rgb', r'2024苏家屯\0628\多光谱\rgb.tif'),  # 可见光TIF文件路径
-        # ('hrgb', r'2024苏家屯\0628\可见光\hrgb.tif'),  # 高清晰度RGBTIF文件路径
-        # ('dsm', r'2024苏家屯\0628\可见光\dsm.tif'), # 高程TIF文件路径
-        # ('rededge1', r'2024苏家屯\0628\多光谱\rededge1.tif'),  # 红边1波段TIF文件路径
-        # ('rededge2', r'2024苏家屯\0628\多光谱\rededge2.tif'),  # 红边2波段TIF文件路径
-        # ('rededge3', r'2024苏家屯\0628\多光谱\rededge3.tif'),  # 红边3波段TIF文件路径
-        # ('swir1', r'2024苏家屯\0628\多光谱\swir1.tif'),  # 短波红外1波段TIF文件路径
-        # ('swir2', r'2024苏家屯\0628\多光谱\swir2.tif'),  # 短波红外2波段TIF文件路径
+        ('red', r'2024苏家屯\20240628\red.tif'),  # 红光波段TIF文件路径
+        ('nir', r'2024苏家屯\20240628\nir.tif'),  # 近红外波段TIF文件路径
+        # ('green', r'2024苏家屯\20240628\green.tif'),  # 绿光波段TIF文件路径
+        # ('blue', r'2024苏家屯\20240628\blue.tif'),  # 蓝光波段TIF文件路径
+        # ('rededge', r'2024苏家屯\20240628\rededge.tif'),  # 红边波段TIF文件路径
+        # ('rgb', r'2024苏家屯\20240628\rgb.tif'),  # 可见光TIF文件路径
+        # ('hrgb', r'2024苏家屯\20240628\hrgb.tif'),  # 高清晰度RGBTIF文件路径
+        # ('dsm', r'2024苏家屯\20240628\dsm.tif'), # 高程TIF文件路径
+        # ('rededge1', r'2024苏家屯\20240628\rededge1.tif'),  # 红边1波段TIF文件路径
+        # ('rededge2', r'2024苏家屯\20240628\rededge2.tif'),  # 红边2波段TIF文件路径
+        # ('rededge3', r'2024苏家屯\20240628\rededge3.tif'),  # 红边3波段TIF文件路径
+        # ('swir1', r'2024苏家屯\20240628\swir1.tif'),  # 短波红外1波段TIF文件路径
+        # ('swir2', r'2024苏家屯\20240628\swir2.tif'),  # 短波红外2波段TIF文件路径
     ]
-    shp_path = r'2024苏家屯\0628\多光谱\shape.shp'  # 替换为实际的shapefile路径
+    shp_path = r'2024苏家屯\20240628\shape.shp'  # 替换为实际的shapefile路径
     
     try:
         # 初始化分析器
@@ -146,8 +146,8 @@ def main():
         
         print(f"计算完成，共处理 {len(results)} 个区块")
         
-        analyzer.export_results_to_shapefile(results, r'2024苏家屯\0628\多光谱\result_index.shp')
-        print(r"结果已导出到2024苏家屯\0628\多光谱\result_index.shp")
+        analyzer.export_results_to_shapefile(results, r'2024苏家屯\20240628\result_index.shp')
+        print(r"结果已导出到2024苏家屯\20240628\result_index.shp")
         
     except Exception as e:
         print(f"处理过程中出错: {str(e)}")
