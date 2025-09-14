@@ -164,56 +164,68 @@ def process_data_folder(data_folder, folder_name, root_folder, output_base_dir=N
             
             if has_required_bands:
                 red = tile_data['red']
+                green = tile_data['green']
                 nir = tile_data['nir']
                 
                 # 计算NDVI
                 with np.errstate(divide='ignore', invalid='ignore'):
-                    ndvi = (nir - red) / (nir + red)
-                    # 计算OSAVI (优化土壤调整植被指数)
-                    osavi = (1 + 0.16) * (nir - red) / (nir + red + 0.16)
+                    # ndvi = (nir - red) / (nir + red)
+                    # # 计算OSAVI (优化土壤调整植被指数)
+                    # osavi = (1 + 0.16) * (nir - red) / (nir + red + 0.16)
+                    gndvi = (nir - green) / (nir + green)
                     
                 # 替换NaN和无穷大值
-                ndvi = np.nan_to_num(ndvi, nan=0.0, posinf=1.0, neginf=-1.0)
-                osavi = np.nan_to_num(osavi, nan=0.0, posinf=1.0, neginf=-1.0)
+                # ndvi = np.nan_to_num(ndvi, nan=0.0, posinf=1.0, neginf=-1.0)
+                # osavi = np.nan_to_num(osavi, nan=0.0, posinf=1.0, neginf=-1.0)
+                gndvi = np.nan_to_num(gndvi, nan=0.0, posinf=1.0, neginf=-1.0)
                 
-                # 计算NDVI的均值和变异系数
-                ndvi_mean = np.nanmean(ndvi)
-                if ndvi_mean == 0:
-                    ndvi_cv = 0
-                else:
-                    ndvi_cv = np.nanstd(ndvi) / ndvi_mean
+                # # 计算NDVI的均值和变异系数
+                # ndvi_mean = np.nanmean(ndvi)
+                # if ndvi_mean == 0:
+                #     ndvi_cv = 0
+                # else:
+                #     ndvi_cv = np.nanstd(ndvi) / ndvi_mean
                 
-                # 计算OSAVI的均值和变异系数
-                osavi_mean = np.nanmean(osavi)
-                if osavi_mean == 0:
-                    osavi_cv = 0
+                # # 计算OSAVI的均值和变异系数
+                # osavi_mean = np.nanmean(osavi)
+                # if osavi_mean == 0:
+                #     osavi_cv = 0
+                # else:
+                #     osavi_cv = np.nanstd(osavi) / osavi_mean
+
+                # 计算GNDVI的均值和变异系数
+                gndvi_mean = np.nanmean(gndvi)
+                if gndvi_mean == 0:
+                    gndvi_cv = 0
                 else:
-                    osavi_cv = np.nanstd(osavi) / osavi_mean
+                    gndvi_cv = np.nanstd(gndvi) / gndvi_mean
                 
                 # 添加到结果
-                result['ndvi'] = ndvi_mean
-                result['ndvi_cv'] = ndvi_cv
-                result['osavi'] = osavi_mean
-                result['osavi_cv'] = osavi_cv
+                # result['ndvi'] = ndvi_mean
+                # result['ndvi_cv'] = ndvi_cv
+                # result['osavi'] = osavi_mean
+                # result['osavi_cv'] = osavi_cv
+                result['gndvi'] = gndvi_mean
+                # result['gndvi_cv'] = gndvi_cv
             
-            # 计算超绿指数EXG
-            if has_green_band and 'rgb' in tile_data:
-                rgb_data = tile_data['rgb']
-                if len(rgb_data.shape) >= 3 and rgb_data.shape[0] >= 3:
-                    # 假设RGB通道顺序为: 红(0), 绿(1), 蓝(2)
-                    rgb_r = rgb_data[0, :, :]
-                    rgb_g = rgb_data[1, :, :]
-                    rgb_b = rgb_data[2, :, :]
+            # # 计算超绿指数EXG
+            # if has_green_band and 'rgb' in tile_data:
+            #     rgb_data = tile_data['rgb']
+            #     if len(rgb_data.shape) >= 3 and rgb_data.shape[0] >= 3:
+            #         # 假设RGB通道顺序为: 红(0), 绿(1), 蓝(2)
+            #         rgb_r = rgb_data[0, :, :]
+            #         rgb_g = rgb_data[1, :, :]
+            #         rgb_b = rgb_data[2, :, :]
                     
-                    # 归一化RGB值
-                    rgb_r = rgb_r / np.max(rgb_r) if np.max(rgb_r) > 0 else rgb_r
-                    rgb_g = rgb_g / np.max(rgb_g) if np.max(rgb_g) > 0 else rgb_g
-                    rgb_b = rgb_b / np.max(rgb_b) if np.max(rgb_b) > 0 else rgb_b
+            #         # 归一化RGB值
+            #         rgb_r = rgb_r / np.max(rgb_r) if np.max(rgb_r) > 0 else rgb_r
+            #         rgb_g = rgb_g / np.max(rgb_g) if np.max(rgb_g) > 0 else rgb_g
+            #         rgb_b = rgb_b / np.max(rgb_b) if np.max(rgb_b) > 0 else rgb_b
                     
-                    # 计算超绿指数EXG
-                    exg = 2 * rgb_g - rgb_r - rgb_b
-                    exg_mean = np.nanmean(exg)
-                    result['exg'] = exg_mean
+            #         # 计算超绿指数EXG
+            #         exg = 2 * rgb_g - rgb_r - rgb_b
+            #         exg_mean = np.nanmean(exg)
+            #         result['exg'] = exg_mean
             
             results.append(result)
         
