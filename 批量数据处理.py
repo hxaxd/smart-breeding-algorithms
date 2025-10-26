@@ -4,12 +4,14 @@ import rasterio
 import rasterio.warp
 import rasterio.enums
 from rasterio.enums import Resampling
+from PIL import Image
+import json
 from core.multi_raster_analyzer import MultiRasterAnalyzer
 from utils.file_utils import create_dir_if_not_exists
 from pathlib import Path
 
 
-def process_data_folder(data_folder, folder_name, root_folder, output_base_dir=None):
+def process_data_folder(data_folder, folder_name, output_base_dir=None):
     """处理单个数据文件夹中的所有tif和shp文件"""
     print(f"处理数据文件夹: {data_folder}")
     
@@ -109,6 +111,65 @@ def process_data_folder(data_folder, folder_name, root_folder, output_base_dir=N
                             else:
                                 print(f"    ✅ 验证 - 输出CRS: {verify.crs}")
                                 print(f"    ✅ 验证 - 输出范围: {verify.bounds}")
+                            
+                            # 获取bounds信息
+                            bounds = {
+                                'crs': str(verify.crs),
+                                'bounds': [
+                                    float(verify.bounds.left),
+                                    float(verify.bounds.bottom),
+                                    float(verify.bounds.right),
+                                    float(verify.bounds.top)
+                                ],
+                            }
+                            
+                            # 保存bounds信息到JSON文件
+                            bounds_json_path = os.path.join(resampled_output_dir, f'{name}_bounds.json')
+                            with open(bounds_json_path, 'w') as json_file:
+                                json.dump(bounds, json_file, indent=4)
+                            print(f"    ✅ 保存bounds信息到: {bounds_json_path}")
+                            
+                            # 输出PNG文件
+                            png_output_path = os.path.join(resampled_output_dir, f'{name}.png')
+                            
+                            # 读取数据并转换为适合PIL的格式
+                            data_for_png = verify.read()
+                            
+                            # 处理多波段数据
+                            if data_for_png.shape[0] == 1:  # 单波段
+                                # 归一化到0-255范围
+                                data_norm = ((data_for_png[0] - np.nanmin(data_for_png[0])) / 
+                                            (np.nanmax(data_for_png[0]) - np.nanmin(data_for_png[0])) * 255)
+                                data_norm = np.nan_to_num(data_norm, nan=0).astype(np.uint8)
+                                img = Image.fromarray(data_norm, mode='L')
+                            elif data_for_png.shape[0] >= 3:  # 多波段，取前3个作为RGB
+                                # 选择前3个波段
+                                rgb_bands = data_for_png[:3, :, :]
+                                
+                                # 归一化每个波段到0-255范围
+                                rgb_normalized = np.zeros_like(rgb_bands, dtype=np.uint8)
+                                for i in range(3):
+                                    band_data = rgb_bands[i]
+                                    if np.nanmax(band_data) > np.nanmin(band_data):
+                                        band_norm = ((band_data - np.nanmin(band_data)) / 
+                                                   (np.nanmax(band_data) - np.nanmin(band_data)) * 255)
+                                        rgb_normalized[i] = np.nan_to_num(band_norm, nan=0).astype(np.uint8)
+                                    else:
+                                        rgb_normalized[i] = np.zeros_like(band_data, dtype=np.uint8)
+                                
+                                # 转换形状从 (bands, height, width) 到 (height, width, bands)
+                                rgb_image = np.transpose(rgb_normalized, (1, 2, 0))
+                                img = Image.fromarray(rgb_image, mode='RGB')
+                            else:
+                                # 其他情况，使用第一个波段
+                                data_norm = ((data_for_png[0] - np.nanmin(data_for_png[0])) / 
+                                            (np.nanmax(data_for_png[0]) - np.nanmin(data_for_png[0])) * 255)
+                                data_norm = np.nan_to_num(data_norm, nan=0).astype(np.uint8)
+                                img = Image.fromarray(data_norm, mode='L')
+                            
+                            # 保存PNG文件
+                            img.save(png_output_path)
+                            print(f"    ✅ 保存PNG图像到: {png_output_path}")
                     
                     print(f"  成功重采样{name}文件到: {resampled_file_path}")
                 except Exception as e:
@@ -128,38 +189,29 @@ def process_data_folder(data_folder, folder_name, root_folder, output_base_dir=N
             rgb_output_dir = Path(output_base_dir).parent / 'tiles'
             create_dir_if_not_exists(rgb_output_dir)
             
-            # 重新初始化只包含RGB的分析器
+            # 初始化只包含RGB的分析器
             rgb_analyzer = MultiRasterAnalyzer(shp_path, [('rgb', os.path.join(data_folder, 'rgb.tif'))])
             
             for tile_id, tile_data in rgb_analyzer.iterate_tiles():
                 # 构建输出文件路径
-                output_path = os.path.join(rgb_output_dir, str(tile_id), f"{folder_name}.tif")
+                output_path = os.path.join(rgb_output_dir, str(tile_id), f"{folder_name}.png")
                 create_dir_if_not_exists(os.path.join(rgb_output_dir, str(tile_id)))
                 
-                # 获取RGB底图的元数据
-                rgb_raster = rgb_analyzer.rasters['rgb']
-                meta = rgb_raster.meta.copy()
-                # 获取当前图块的边界
-                tile_bounds = rgb_analyzer.tiles[rgb_analyzer.tiles['FID'] == int(tile_id)].geometry.iloc[0].bounds
+                # 获取RGB数据并转换为PIL格式
+                # 数据格式为 (bands, height, width)，实际是4波段(RGBA)
+                rgb_data = tile_data['rgb']
                 
-                # 更新元数据
-                meta.update({
-                    'driver': 'GTiff',
-                    'height': tile_data['rgb'].shape[1],
-                    'width': tile_data['rgb'].shape[2],
-                    'transform': rasterio.windows.transform(
-                        rasterio.windows.from_bounds(
-                        *tile_bounds,
-                        rgb_raster.transform
-                    ),
-                    rgb_raster.transform
-                    )
-                })
+                # 数据已经是uint8类型，值范围在0-255之间，不需要归一化
+                # 只取前3个波段(RGB)，忽略Alpha通道
+                rgb_bands = rgb_data[:3, :, :]  # 取前3个波段
                 
-                # 写入文件
-                with rasterio.open(output_path, 'w', **meta) as dst:
-                    dst.write(tile_data['rgb'])
-            print(f"成功将RGB图像按shp切割到: {rgb_output_dir}")
+                # 转换形状从 (bands, height, width) 到 (height, width, bands)
+                rgb_image = np.transpose(rgb_bands, (1, 2, 0))
+                
+                # 创建PIL图像并保存为PNG
+                img = Image.fromarray(rgb_image)
+                img.save(output_path)
+            print(f"成功将RGB图像按shp切割到: {rgb_output_dir} (PNG格式)")
         
         # 任务3: 计算指数并输出result_index.shp
         # 初始化分析器
@@ -183,11 +235,15 @@ def process_data_folder(data_folder, folder_name, root_folder, output_base_dir=N
         
         iterator = {}
 
-        for tile_id, tile_data in analyzer_ms.iterate_tiles():
-            iterator[tile_id] = tile_data
+        if has_required_bands:
+            for tile_id, tile_data in analyzer_ms.iterate_tiles():
+                iterator[tile_id] = tile_data
 
-        for tile_id, tile_data in analyzer_rgb.iterate_tiles():
-            iterator[tile_id]['rgb'] = tile_data['rgb']
+        if has_rgb_band:
+            for tile_id, tile_data in analyzer_rgb.iterate_tiles():
+                if tile_id not in iterator:
+                    iterator[tile_id] = {}
+                iterator[tile_id]['rgb'] = tile_data['rgb']
         
         
         for tile_id, tile_data in iterator.items():
@@ -292,7 +348,7 @@ def batch_process_folders(root_folder = "2025丹东629", output_root_dir="2025da
             create_dir_if_not_exists(current_output_dir)
         
         # 处理当前文件夹
-        process_data_folder(folder_path, folder_name, root_folder, current_output_dir)
+        process_data_folder(folder_path, folder_name, current_output_dir)
     
     print("批量处理完成")
 
