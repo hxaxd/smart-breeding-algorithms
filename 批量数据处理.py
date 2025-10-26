@@ -139,7 +139,11 @@ def process_data_folder(data_folder, folder_name, output_base_dir=None):
                                 data_norm = ((data_for_png[0] - np.nanmin(data_for_png[0])) / 
                                             (np.nanmax(data_for_png[0]) - np.nanmin(data_for_png[0])) * 255)
                                 data_norm = np.nan_to_num(data_norm, nan=0).astype(np.uint8)
-                                img = Image.fromarray(data_norm, mode='L')
+                                # 创建RGBA图像，设置透明背景
+                                img = Image.fromarray(data_norm, mode='L').convert('RGBA')
+                                # 将0值（原NaN值）设置为完全透明
+                                alpha_channel = np.where(data_norm == 0, 0, 255).astype(np.uint8)
+                                img.putalpha(Image.fromarray(alpha_channel, mode='L'))
                             elif data_for_png.shape[0] >= 3:  # 多波段，取前3个作为RGB
                                 # 选择前3个波段
                                 rgb_bands = data_for_png[:3, :, :]
@@ -157,13 +161,24 @@ def process_data_folder(data_folder, folder_name, output_base_dir=None):
                                 
                                 # 转换形状从 (bands, height, width) 到 (height, width, bands)
                                 rgb_image = np.transpose(rgb_normalized, (1, 2, 0))
-                                img = Image.fromarray(rgb_image, mode='RGB')
+                                # 创建RGBA图像，设置透明背景
+                                img = Image.fromarray(rgb_image, mode='RGB').convert('RGBA')
+                                # 检测黑色像素（所有通道都为0）并设置为透明
+                                r, g, b, a = img.split()
+                                black_mask = (np.array(r) == 0) & (np.array(g) == 0) & (np.array(b) == 0)
+                                alpha_array = np.array(a)
+                                alpha_array[black_mask] = 0  # 将黑色像素设置为透明
+                                img.putalpha(Image.fromarray(alpha_array, mode='L'))
                             else:
                                 # 其他情况，使用第一个波段
                                 data_norm = ((data_for_png[0] - np.nanmin(data_for_png[0])) / 
                                             (np.nanmax(data_for_png[0]) - np.nanmin(data_for_png[0])) * 255)
                                 data_norm = np.nan_to_num(data_norm, nan=0).astype(np.uint8)
-                                img = Image.fromarray(data_norm, mode='L')
+                                # 创建RGBA图像，设置透明背景
+                                img = Image.fromarray(data_norm, mode='L').convert('RGBA')
+                                # 将0值（原NaN值）设置为完全透明
+                                alpha_channel = np.where(data_norm == 0, 0, 255).astype(np.uint8)
+                                img.putalpha(Image.fromarray(alpha_channel, mode='L'))
                             
                             # 保存PNG文件
                             img.save(png_output_path)
@@ -206,8 +221,14 @@ def process_data_folder(data_folder, folder_name, output_base_dir=None):
                 # 转换形状从 (bands, height, width) 到 (height, width, bands)
                 rgb_image = np.transpose(rgb_bands, (1, 2, 0))
                 
-                # 创建PIL图像并保存为PNG
-                img = Image.fromarray(rgb_image)
+                # 创建PIL图像并设置透明背景
+                img = Image.fromarray(rgb_image, mode='RGB').convert('RGBA')
+                # 检测黑色像素（所有通道都为0）并设置为透明
+                r, g, b, a = img.split()
+                black_mask = (np.array(r) == 0) & (np.array(g) == 0) & (np.array(b) == 0)
+                alpha_array = np.array(a)
+                alpha_array[black_mask] = 0  # 将黑色像素设置为透明
+                img.putalpha(Image.fromarray(alpha_array, mode='L'))
                 img.save(output_path)
             print(f"成功将RGB图像按shp切割到: {rgb_output_dir} (PNG格式)")
         
