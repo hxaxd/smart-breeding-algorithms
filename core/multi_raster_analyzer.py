@@ -179,6 +179,46 @@ class MultiRasterAnalyzer:
         except Exception as e:
             raise Exception(f"导出结果到shapefile时出错: {str(e)}")
 
+    def export_results_to_geojson(self, result_data: List[Dict], output_path: str) -> bool:
+        """将分析结果导出到geojson
+        
+        Args:
+            result_data: 结果数据，字典数组，每个字典格式为{'FID': 数字, '自定义字段': 值}
+            output_path: 输出geojson路径
+        
+        Returns:
+            是否导出成功
+        """
+        try:
+            # 创建输出目录（如果不存在）
+            output_dir = os.path.dirname(output_path)
+            if output_dir and not os.path.exists(output_dir):
+                create_dir_if_not_exists(output_dir)
+                
+            # 创建一个原始数据的副本
+            output_gdf = self.tiles.copy()
+            
+            # 处理结果数据
+            for item in result_data:
+                fid = item['FID']
+                
+                if fid is None:
+                    continue
+                
+                # 检查FID是否存在
+                if fid not in output_gdf['FID'].values:
+                    continue
+                
+                # 添加或更新字段
+                for key, value in item.items():
+                    if key != 'FID':
+                        output_gdf.loc[output_gdf['FID'] == fid, key] = value
+            
+            # 保存到geojson
+            output_gdf.to_file(output_path, driver='GeoJSON')
+            return True
+        except Exception as e:
+            raise Exception(f"导出结果到geojson时出错: {str(e)}")
 
     def __del__(self):
         """析构函数，关闭所有打开的底图"""

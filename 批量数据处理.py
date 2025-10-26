@@ -3,6 +3,7 @@ import numpy as np
 import rasterio
 import rasterio.warp
 import rasterio.enums
+from rasterio.enums import Resampling
 from core.multi_raster_analyzer import MultiRasterAnalyzer
 from utils.file_utils import create_dir_if_not_exists
 from pathlib import Path
@@ -18,7 +19,7 @@ def process_data_folder(data_folder, folder_name, root_folder, output_base_dir=N
     
     # 定义需要处理的tif文件列表
     tif_files = [
-        # ('rgb', os.path.join(data_folder, 'rgb.tif')),
+        ('rgb', os.path.join(data_folder, 'rgb.tif')),
         ('green', os.path.join(data_folder, 'green.tif')),
         ('red', os.path.join(data_folder, 'red.tif')),
         ('rededge', os.path.join(data_folder, 'rededge.tif')),
@@ -40,125 +41,156 @@ def process_data_folder(data_folder, folder_name, root_folder, output_base_dir=N
     
     try:
     
-        # # 任务1: 重采样所有存在的TIFF文件
-        # if len(existing_tif_files) > 0:
-        #     print(f"开始重采样所有{len(existing_tif_files)}个TIFF文件...")
-        #     # 创建重采样输出目录
-        #     resampled_output_dir = os.path.join(output_base_dir, 'resampled')
-        #     create_dir_if_not_exists(resampled_output_dir)
+        # 任务1: 重采样所有存在的TIFF文件
+        if len(existing_tif_files) > 0:
+            print(f"开始重采样所有{len(existing_tif_files)}个TIFF文件...")
+            # 创建重采样输出目录
+            resampled_output_dir = output_base_dir
+            create_dir_if_not_exists(resampled_output_dir)
             
-        #     # 遍历所有存在的TIFF文件
-        #     for name, path in existing_tif_files:
-        #         try:
-        #             # 定义重采样后的文件路径
-        #             resampled_file_path = os.path.join(resampled_output_dir, f'{name}_resampled.tif')
+            # 遍历所有存在的TIFF文件
+            for name, path in existing_tif_files:
+                try:
+                    # 定义重采样后的文件路径
+                    resampled_file_path = os.path.join(resampled_output_dir, f'{name}.tif')
                     
-        #             print(f"  正在重采样{name}文件...")
+                    print(f"  正在重采样{name}文件...")
                     
-        #             # 打开原始图像
-        #             with rasterio.open(path) as src:
-        #                 # 获取原始图像元数据
-        #                 meta = src.meta.copy()
+                    # 打开原始图像
+                    with rasterio.open(path) as src:
+                        # 定义重采样因子（缩小为原来的1/2）
+                        scale_factor = 0.5
                         
-        #                 # 定义重采样后的分辨率（缩小为原来的1/2）
-        #                 new_height = src.height // 2
-        #                 new_width = src.width // 2
+                        # 计算新的尺寸
+                        new_height = int(src.height * scale_factor)
+                        new_width = int(src.width * scale_factor)
                         
-        #                 # 更新元数据中的高度、宽度和转换矩阵
-        #                 meta.update({
-        #                     'height': new_height,
-        #                     'width': new_width,
-        #                     'transform': rasterio.Affine(
-        #                         src.transform.a * 2,
-        #                         src.transform.b,
-        #                         src.transform.c,
-        #                         src.transform.d,
-        #                         src.transform.e * 2,
-        #                         src.transform.f
-        #                     )
-        #                 })
+                        # 读取并重采样所有波段
+                        data = src.read(
+                            out_shape=(
+                                src.count,
+                                new_height,
+                                new_width
+                            ),
+                            resampling=Resampling.bilinear
+                        )
                         
-        #                 # 重采样并写入新文件
-        #                 with rasterio.open(resampled_file_path, 'w', **meta) as dst:
-        #                     # 使用双线性插值方法重采样
-        #                     for i in range(1, src.count + 1):
-        #                         dst.write(
-        #                             rasterio.warp.reproject(
-        #                                 source=rasterio.band(src, i),
-        #                                 destination=np.zeros((new_height, new_width), dtype=meta['dtype']),
-        #                                 src_transform=src.transform,
-        #                                 src_crs=src.crs,
-        #                                 dst_transform=meta['transform'],
-        #                                 dst_crs=src.crs,
-        #                                 resampling=rasterio.enums.Resampling.bilinear
-        #                             )[0],
-        #                             i
-        #                         )
+                        # 计算新的transform
+                        # 使用scale方法确保正确的地理配准
+                        new_transform = src.transform * src.transform.scale(
+                            (src.width / new_width),
+                            (src.height / new_height)
+                        )
+                        
+                        # 获取原始元数据并更新
+                        meta = src.meta.copy()
+                        meta.update({
+                            'height': new_height,
+                            'width': new_width,
+                            'transform': new_transform,
+                            'crs': src.crs
+                        })
+                        
+                        # 打印调试信息
+                        print(f"    原始尺寸: {src.height} x {src.width}")
+                        print(f"    新尺寸: {new_height} x {new_width}")
+                        print(f"    CRS: {src.crs}")
+                        print(f"    原始Transform: {src.transform}")
+                        print(f"    新Transform: {new_transform}")
+                        
+                        # 写入重采样后的文件
+                        with rasterio.open(resampled_file_path, 'w', **meta) as dst:
+                            dst.write(data)
+                        
+                        # 验证输出文件的地理信息
+                        with rasterio.open(resampled_file_path) as verify:
+                            if verify.crs is None:
+                                print(f"    ⚠️ 警告: CRS丢失!")
+                            else:
+                                print(f"    ✅ 验证 - 输出CRS: {verify.crs}")
+                                print(f"    ✅ 验证 - 输出范围: {verify.bounds}")
                     
-        #             print(f"  成功重采样{name}文件到: {resampled_file_path}")
-        #         except Exception as e:
-        #             print(f"  重采样{name}文件时出错: {str(e)}")
-        #             continue
+                    print(f"  成功重采样{name}文件到: {resampled_file_path}")
+                except Exception as e:
+                    print(f"  重采样{name}文件时出错: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
             
-        #     print(f"成功完成所有TIFF文件的重采样，结果保存在: {resampled_output_dir}")
-        # else:
-        #     print("未找到任何需要重采样的TIFF文件，跳过重采样步骤")
+            print(f"成功完成所有TIFF文件的重采样，结果保存在: {resampled_output_dir}")
+        else:
+            print("未找到任何需要重采样的TIFF文件，跳过重采样步骤")
         
-        # # 任务2: 按shp将rgb进行图像切割 (如果存在rgb文件)
-        # has_rgb = any(name == 'rgb' for name, _ in existing_tif_files)
-        # if has_rgb:
-        #     print("开始按shp切割RGB图像...")
-        #     rgb_output_dir = os.path.join(root_folder, 'tiles')
-        #     create_dir_if_not_exists(rgb_output_dir)
+        # 任务2: 按shp将rgb进行图像切割 (如果存在rgb文件)
+        has_rgb = any(name == 'rgb' for name, _ in existing_tif_files)
+        if has_rgb:
+            print("开始按shp切割RGB图像...")
+            rgb_output_dir = Path(output_base_dir).parent / 'tiles'
+            create_dir_if_not_exists(rgb_output_dir)
             
-        #     # 重新初始化只包含RGB的分析器
-        #     rgb_analyzer = MultiRasterAnalyzer(shp_path, [('rgb', os.path.join(data_folder, 'rgb.tif'))])
+            # 重新初始化只包含RGB的分析器
+            rgb_analyzer = MultiRasterAnalyzer(shp_path, [('rgb', os.path.join(data_folder, 'rgb.tif'))])
             
-        #     for tile_id, tile_data in rgb_analyzer.iterate_tiles():
-        #         # 构建输出文件路径
-        #         output_path = os.path.join(rgb_output_dir, str(tile_id), f"{folder_name}.tif")
-        #         create_dir_if_not_exists(os.path.join(rgb_output_dir, str(tile_id)))
+            for tile_id, tile_data in rgb_analyzer.iterate_tiles():
+                # 构建输出文件路径
+                output_path = os.path.join(rgb_output_dir, str(tile_id), f"{folder_name}.tif")
+                create_dir_if_not_exists(os.path.join(rgb_output_dir, str(tile_id)))
                 
-        #         # 获取RGB底图的元数据
-        #         rgb_raster = rgb_analyzer.rasters['rgb']
-        #         meta = rgb_raster.meta.copy()
-        #         # 获取当前图块的边界
-        #         tile_bounds = rgb_analyzer.tiles[rgb_analyzer.tiles['FID'] == int(tile_id)].geometry.iloc[0].bounds
+                # 获取RGB底图的元数据
+                rgb_raster = rgb_analyzer.rasters['rgb']
+                meta = rgb_raster.meta.copy()
+                # 获取当前图块的边界
+                tile_bounds = rgb_analyzer.tiles[rgb_analyzer.tiles['FID'] == int(tile_id)].geometry.iloc[0].bounds
                 
-        #         # 更新元数据
-        #         meta.update({
-        #             'driver': 'GTiff',
-        #             'height': tile_data['rgb'].shape[1],
-        #             'width': tile_data['rgb'].shape[2],
-        #             'transform': rasterio.windows.transform(
-        #                 rasterio.windows.from_bounds(
-        #                 *tile_bounds,
-        #                 rgb_raster.transform
-        #             ),
-        #             rgb_raster.transform
-        #             )
-        #         })
+                # 更新元数据
+                meta.update({
+                    'driver': 'GTiff',
+                    'height': tile_data['rgb'].shape[1],
+                    'width': tile_data['rgb'].shape[2],
+                    'transform': rasterio.windows.transform(
+                        rasterio.windows.from_bounds(
+                        *tile_bounds,
+                        rgb_raster.transform
+                    ),
+                    rgb_raster.transform
+                    )
+                })
                 
-        #         # 写入文件
-        #         with rasterio.open(output_path, 'w', **meta) as dst:
-        #             dst.write(tile_data['rgb'])
-        #     print(f"成功将RGB图像按shp切割到: {rgb_output_dir}")
+                # 写入文件
+                with rasterio.open(output_path, 'w', **meta) as dst:
+                    dst.write(tile_data['rgb'])
+            print(f"成功将RGB图像按shp切割到: {rgb_output_dir}")
         
         # 任务3: 计算指数并输出result_index.shp
         # 初始化分析器
-        analyzer = MultiRasterAnalyzer(shp_path, existing_tif_files)
-        print(f"成功加载 {len(existing_tif_files)} 个栅格文件和 1 个shapefile")
+        has_required_bands = all(band in [name for name, _ in existing_tif_files] for band in ['red', 'nir', 'green'])
+
+        if not has_required_bands:
+            print("警告: 缺少计算NDVI所需的red和nir波段，无法计算这些指数")
+        else:    
+            index_tif_files = [item for item in existing_tif_files if item[0] in ['red', 'green', 'nir']]
+            analyzer_ms = MultiRasterAnalyzer(shp_path, index_tif_files)
+        
+        has_rgb_band = all(band in [name for name, _ in existing_tif_files] for band in ['rgb'])
+        if not has_rgb_band:
+            print("警告: 缺少计算RGB波段，无法计算这些指数")
+        else:
+            analyzer_rgb = MultiRasterAnalyzer(shp_path, [item for item in existing_tif_files if item[0] == 'rgb'])
+
+        print(f"成功加载 {len(index_tif_files)+(1 if has_rgb_band else 0)} 个栅格文件和 1 个shapefile")
         print("开始计算指数并生成result_index.shp...")
         results = []
         
-        # 检查是否有足够的波段计算所需指数
-        has_required_bands = all(band in [name for name, _ in existing_tif_files] for band in ['red', 'nir'])
-        has_green_band = 'green' in [name for name, _ in existing_tif_files]
+        iterator = {}
+
+        for tile_id, tile_data in analyzer_ms.iterate_tiles():
+            iterator[tile_id] = tile_data
+
+        for tile_id, tile_data in analyzer_rgb.iterate_tiles():
+            iterator[tile_id]['rgb'] = tile_data['rgb']
         
-        if not has_required_bands:
-            print("警告: 缺少计算NDVI和OSAVI所需的red和nir波段，无法计算这些指数")
         
-        for tile_id, tile_data in analyzer.iterate_tiles():
+        for tile_id, tile_data in iterator.items():
             print(f"处理区块: {tile_id}")
             result = {'FID': tile_id}
             
@@ -169,22 +201,22 @@ def process_data_folder(data_folder, folder_name, root_folder, output_base_dir=N
                 
                 # 计算NDVI
                 with np.errstate(divide='ignore', invalid='ignore'):
-                    # ndvi = (nir - red) / (nir + red)
+                    ndvi = (nir - red) / (nir + red)
                     # # 计算OSAVI (优化土壤调整植被指数)
                     # osavi = (1 + 0.16) * (nir - red) / (nir + red + 0.16)
-                    gndvi = (nir - green) / (nir + green)
+                    # gndvi = (nir - green) / (nir + green)
                     
                 # 替换NaN和无穷大值
-                # ndvi = np.nan_to_num(ndvi, nan=0.0, posinf=1.0, neginf=-1.0)
+                ndvi = np.nan_to_num(ndvi, nan=0.0, posinf=1.0, neginf=-1.0)
                 # osavi = np.nan_to_num(osavi, nan=0.0, posinf=1.0, neginf=-1.0)
-                gndvi = np.nan_to_num(gndvi, nan=0.0, posinf=1.0, neginf=-1.0)
+                # gndvi = np.nan_to_num(gndvi, nan=0.0, posinf=1.0, neginf=-1.0)
                 
-                # # 计算NDVI的均值和变异系数
-                # ndvi_mean = np.nanmean(ndvi)
-                # if ndvi_mean == 0:
-                #     ndvi_cv = 0
-                # else:
-                #     ndvi_cv = np.nanstd(ndvi) / ndvi_mean
+                # 计算NDVI的均值和变异系数
+                ndvi_mean = np.nanmean(ndvi)
+                if ndvi_mean == 0:
+                    ndvi_cv = 0
+                else:
+                    ndvi_cv = np.nanstd(ndvi) / ndvi_mean
                 
                 # # 计算OSAVI的均值和变异系数
                 # osavi_mean = np.nanmean(osavi)
@@ -193,54 +225,54 @@ def process_data_folder(data_folder, folder_name, root_folder, output_base_dir=N
                 # else:
                 #     osavi_cv = np.nanstd(osavi) / osavi_mean
 
-                # 计算GNDVI的均值和变异系数
-                gndvi_mean = np.nanmean(gndvi)
-                if gndvi_mean == 0:
-                    gndvi_cv = 0
-                else:
-                    gndvi_cv = np.nanstd(gndvi) / gndvi_mean
+                # # 计算GNDVI的均值和变异系数
+                # gndvi_mean = np.nanmean(gndvi)
+                # if gndvi_mean == 0:
+                #     gndvi_cv = 0
+                # else:
+                #     gndvi_cv = np.nanstd(gndvi) / gndvi_mean
                 
                 # 添加到结果
-                # result['ndvi'] = ndvi_mean
-                # result['ndvi_cv'] = ndvi_cv
+                result['ndvi'] = ndvi_mean
+                result['ndvi_cv'] = ndvi_cv
+                result['lai'] = ndvi_mean * 10
+                result['lai_cv'] = ndvi_cv * 10
+
                 # result['osavi'] = osavi_mean
                 # result['osavi_cv'] = osavi_cv
-                result['gndvi'] = gndvi_mean
+                # result['gndvi'] = gndvi_mean
                 # result['gndvi_cv'] = gndvi_cv
             
-            # # 计算超绿指数EXG
-            # if has_green_band and 'rgb' in tile_data:
-            #     rgb_data = tile_data['rgb']
-            #     if len(rgb_data.shape) >= 3 and rgb_data.shape[0] >= 3:
-            #         # 假设RGB通道顺序为: 红(0), 绿(1), 蓝(2)
-            #         rgb_r = rgb_data[0, :, :]
-            #         rgb_g = rgb_data[1, :, :]
-            #         rgb_b = rgb_data[2, :, :]
+            # 计算超绿指数EXG
+            if has_rgb_band:
+                rgb_data = tile_data['rgb']
+                if len(rgb_data.shape) >= 3 and rgb_data.shape[0] >= 3:
+                    # 假设RGB通道顺序为: 红(0), 绿(1), 蓝(2)
+                    rgb_r = rgb_data[0, :, :]
+                    rgb_g = rgb_data[1, :, :]
+                    rgb_b = rgb_data[2, :, :]
                     
-            #         # 归一化RGB值
-            #         rgb_r = rgb_r / np.max(rgb_r) if np.max(rgb_r) > 0 else rgb_r
-            #         rgb_g = rgb_g / np.max(rgb_g) if np.max(rgb_g) > 0 else rgb_g
-            #         rgb_b = rgb_b / np.max(rgb_b) if np.max(rgb_b) > 0 else rgb_b
-                    
-            #         # 计算超绿指数EXG
-            #         exg = 2 * rgb_g - rgb_r - rgb_b
-            #         exg_mean = np.nanmean(exg)
-            #         result['exg'] = exg_mean
+                    # 计算超绿指数EXG
+                    exg = 2 * rgb_g - rgb_r - rgb_b
+                    exg_mean = np.nanmean(exg)
+                    result['exg'] = exg_mean
             
             results.append(result)
         
-        # 导出结果到shapefile
-        result_shp_path = os.path.join(output_base_dir, 'result_index.shp')
-        analyzer.export_results_to_shapefile(results, result_shp_path)
-        print(f"成功导出结果到: {result_shp_path}")
+        # 导出结果到geojson
+        result_geojson_path = os.path.join(output_base_dir, 'result_index.geojson')
+        analyzer_rgb.export_results_to_geojson(results, result_geojson_path)
+        print(f"成功导出结果到: {result_geojson_path}")
         
         return True
     except Exception as e:
         print(f"处理 {data_folder} 时出错: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
-def batch_process_folders(root_folder = "2025丹东629", output_root_dir=None):
+def batch_process_folders(root_folder = "2025丹东629", output_root_dir="2025dandong629"):
     """批量处理根文件夹下的所有子文件夹"""
     print(f"开始批量处理文件夹: {root_folder}")
     
@@ -268,4 +300,5 @@ def batch_process_folders(root_folder = "2025丹东629", output_root_dir=None):
 if __name__ == '__main__':
     
     # 批量处理文件夹
-    batch_process_folders()
+    batch_process_folders("input/2024苏家屯", "output/2024sujiatun")
+    batch_process_folders("input/2025丹东629", "output/2025dandong629")
