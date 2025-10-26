@@ -48,4 +48,5 @@ python examples.py # 修改为实际的示例文件名
     - `python 计算大全.py`
     - `python 生成示例多源数据文件.py`
     - `python 多源数据融合.py`
+    - `python 批量数据处理.py`
 - 运行示例见示例文件中的注释

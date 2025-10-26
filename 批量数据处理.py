@@ -1,8 +1,6 @@
 import os
 import numpy as np
 import rasterio
-import rasterio.warp
-import rasterio.enums
 from rasterio.enums import Resampling
 from PIL import Image
 import json
