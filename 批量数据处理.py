@@ -1,3 +1,4 @@
+from asyncio import taskgroups
 import os
 import numpy as np
 import rasterio
@@ -9,9 +10,23 @@ from utils.file_utils import create_dir_if_not_exists
 from pathlib import Path
 
 
-def process_data_folder(data_folder, folder_name, output_base_dir=None):
-    """处理单个数据文件夹中的所有tif和shp文件"""
+def process_data_folder(data_folder, folder_name, output_base_dir=None, tasks=None):
+    """处理单个数据文件夹中的所有tif和shp文件
+    
+    参数:
+        data_folder: 输入数据文件夹路径
+        folder_name: 文件夹名称
+        output_base_dir: 输出基础目录
+        tasks: 要执行的任务列表，可选值: ['resample', 'cut', 'calculate']
+               如果为None，则执行所有任务
+    """
     print(f"处理数据文件夹: {data_folder}")
+    
+    # 如果未指定任务，则执行所有任务
+    if tasks is None:
+        tasks = ['resample', 'cut', 'calculate']
+    
+    print(f"将执行任务: {', '.join(tasks)}")
     
     # 确定输出目录
     if output_base_dir is None:
@@ -41,10 +56,10 @@ def process_data_folder(data_folder, folder_name, output_base_dir=None):
     
     try:
     
-        # 任务1: 重采样所有存在的TIFF文件
-        if len(existing_tif_files) > 0:
-            print(f"开始重采样所有{len(existing_tif_files)}个TIFF文件...")
-            # 创建重采样输出目录
+        # 任务1: 处理所有存在的TIFF文件
+        if 'resample' in tasks and len(existing_tif_files) > 0:
+            print(f"开始处理所有{len(existing_tif_files)}个TIFF文件...")
+            # 创建输出目录
             resampled_output_dir = output_base_dir
             create_dir_if_not_exists(resampled_output_dir)
             
@@ -99,245 +114,262 @@ def process_data_folder(data_folder, folder_name, output_base_dir=None):
                         print(f"    新Transform: {new_transform}")
                         
                         # 写入重采样后的文件
-                        with rasterio.open(resampled_file_path, 'w', **meta) as dst:
-                            dst.write(data)
+                        # with rasterio.open(resampled_file_path, 'w', **meta) as dst:
+                        #     dst.write(data)
                         
-                        # 验证输出文件的地理信息
-                        with rasterio.open(resampled_file_path) as verify:
-                            if verify.crs is None:
-                                print(f"    ⚠️ 警告: CRS丢失!")
-                            else:
-                                print(f"    ✅ 验证 - 输出CRS: {verify.crs}")
-                                print(f"    ✅ 验证 - 输出范围: {verify.bounds}")
+                        # # 验证输出文件的地理信息
+                        # with rasterio.open(resampled_file_path) as verify:
+                        #     if verify.crs is None:
+                        #         print(f"    ⚠️ 警告: CRS丢失!")
+                        #     else:
+                        #         print(f"    ✅ 验证 - 输出CRS: {verify.crs}")
+                        #         print(f"    ✅ 验证 - 输出范围: {verify.bounds}")
+                        
+                        # verify = meta
+
+                        # 获取bounds信息
+                        bounds = {
+                            'crs': str(meta['crs']),
+                            'bounds': [
+                                float(src.bounds.left),
+                                float(src.bounds.bottom),
+                                float(src.bounds.right),
+                                float(src.bounds.top)
+                            ],
+                        }
+                        
+                        # 保存bounds信息到JSON文件
+                        bounds_json_path = os.path.join(resampled_output_dir, f'{name}_bounds.json')
+                        with open(bounds_json_path, 'w') as json_file:
+                            json.dump(bounds, json_file, indent=4)
+                        print(f"    ✅ 保存bounds信息到: {bounds_json_path}")
+                        
+                        # 输出WEBP文件
+                        webp_output_path = os.path.join(resampled_output_dir, f'{name}.webp')
+                        
+                        # 读取数据并转换为适合PIL的格式
+                        data_for_webp = data.astype(np.float32)
+                        
+                        # 处理多波段数据
+                        if data_for_webp.shape[0] == 1:  # 单波段
+                            # 归一化到0-255范围
+                            data_norm = ((data_for_webp[0] - np.nanmin(data_for_webp[0])) / 
+                                        (np.nanmax(data_for_webp[0]) - np.nanmin(data_for_webp[0])) * 255)
+                            data_norm = np.nan_to_num(data_norm, nan=0).astype(np.uint8)
+                            # 创建RGBA图像，设置透明背景
+                            img = Image.fromarray(data_norm, mode='L').convert('RGBA')
+                            # 将0值（原NaN值）设置为完全透明
+                            alpha_channel = np.where(data_norm == 0, 0, 255).astype(np.uint8)
+                            img.putalpha(Image.fromarray(alpha_channel, mode='L'))
+                        elif data_for_webp.shape[0] >= 3:  # 多波段，取前3个作为RGB
+                            # 选择前3个波段
+                            rgb_bands = data_for_webp[:3, :, :]
                             
-                            # 获取bounds信息
-                            bounds = {
-                                'crs': str(verify.crs),
-                                'bounds': [
-                                    float(verify.bounds.left),
-                                    float(verify.bounds.bottom),
-                                    float(verify.bounds.right),
-                                    float(verify.bounds.top)
-                                ],
-                            }
+                            # 归一化每个波段到0-255范围
+                            rgb_normalized = np.zeros_like(rgb_bands, dtype=np.uint8)
+                            for i in range(3):
+                                band_data = rgb_bands[i]
+                                if np.nanmax(band_data) > np.nanmin(band_data):
+                                    band_norm = ((band_data - np.nanmin(band_data)) / 
+                                               (np.nanmax(band_data) - np.nanmin(band_data)) * 255)
+                                    rgb_normalized[i] = np.nan_to_num(band_norm, nan=0).astype(np.uint8)
+                                else:
+                                    rgb_normalized[i] = np.zeros_like(band_data, dtype=np.uint8)
                             
-                            # 保存bounds信息到JSON文件
-                            bounds_json_path = os.path.join(resampled_output_dir, f'{name}_bounds.json')
-                            with open(bounds_json_path, 'w') as json_file:
-                                json.dump(bounds, json_file, indent=4)
-                            print(f"    ✅ 保存bounds信息到: {bounds_json_path}")
-                            
-                            # 输出PNG文件
-                            png_output_path = os.path.join(resampled_output_dir, f'{name}.png')
-                            
-                            # 读取数据并转换为适合PIL的格式
-                            data_for_png = verify.read()
-                            
-                            # 处理多波段数据
-                            if data_for_png.shape[0] == 1:  # 单波段
-                                # 归一化到0-255范围
-                                data_norm = ((data_for_png[0] - np.nanmin(data_for_png[0])) / 
-                                            (np.nanmax(data_for_png[0]) - np.nanmin(data_for_png[0])) * 255)
-                                data_norm = np.nan_to_num(data_norm, nan=0).astype(np.uint8)
-                                # 创建RGBA图像，设置透明背景
-                                img = Image.fromarray(data_norm, mode='L').convert('RGBA')
-                                # 将0值（原NaN值）设置为完全透明
-                                alpha_channel = np.where(data_norm == 0, 0, 255).astype(np.uint8)
-                                img.putalpha(Image.fromarray(alpha_channel, mode='L'))
-                            elif data_for_png.shape[0] >= 3:  # 多波段，取前3个作为RGB
-                                # 选择前3个波段
-                                rgb_bands = data_for_png[:3, :, :]
-                                
-                                # 归一化每个波段到0-255范围
-                                rgb_normalized = np.zeros_like(rgb_bands, dtype=np.uint8)
-                                for i in range(3):
-                                    band_data = rgb_bands[i]
-                                    if np.nanmax(band_data) > np.nanmin(band_data):
-                                        band_norm = ((band_data - np.nanmin(band_data)) / 
-                                                   (np.nanmax(band_data) - np.nanmin(band_data)) * 255)
-                                        rgb_normalized[i] = np.nan_to_num(band_norm, nan=0).astype(np.uint8)
-                                    else:
-                                        rgb_normalized[i] = np.zeros_like(band_data, dtype=np.uint8)
-                                
-                                # 转换形状从 (bands, height, width) 到 (height, width, bands)
-                                rgb_image = np.transpose(rgb_normalized, (1, 2, 0))
-                                # 创建RGBA图像，设置透明背景
-                                img = Image.fromarray(rgb_image, mode='RGB').convert('RGBA')
-                                # 检测黑色像素（所有通道都为0）并设置为透明
-                                r, g, b, a = img.split()
-                                black_mask = (np.array(r) == 0) & (np.array(g) == 0) & (np.array(b) == 0)
-                                alpha_array = np.array(a)
-                                alpha_array[black_mask] = 0  # 将黑色像素设置为透明
-                                img.putalpha(Image.fromarray(alpha_array, mode='L'))
-                            else:
-                                # 其他情况，使用第一个波段
-                                data_norm = ((data_for_png[0] - np.nanmin(data_for_png[0])) / 
-                                            (np.nanmax(data_for_png[0]) - np.nanmin(data_for_png[0])) * 255)
-                                data_norm = np.nan_to_num(data_norm, nan=0).astype(np.uint8)
-                                # 创建RGBA图像，设置透明背景
-                                img = Image.fromarray(data_norm, mode='L').convert('RGBA')
-                                # 将0值（原NaN值）设置为完全透明
-                                alpha_channel = np.where(data_norm == 0, 0, 255).astype(np.uint8)
-                                img.putalpha(Image.fromarray(alpha_channel, mode='L'))
-                            
-                            # 保存PNG文件
-                            img.save(png_output_path)
-                            print(f"    ✅ 保存PNG图像到: {png_output_path}")
+                            # 转换形状从 (bands, height, width) 到 (height, width, bands)
+                            rgb_image = np.transpose(rgb_normalized, (1, 2, 0))
+                            # 创建RGBA图像，设置透明背景
+                            img = Image.fromarray(rgb_image, mode='RGB').convert('RGBA')
+                            # 检测黑色像素（所有通道都为0）并设置为透明
+                            r, g, b, a = img.split()
+                            black_mask = (np.array(r) == 0) & (np.array(g) == 0) & (np.array(b) == 0)
+                            alpha_array = np.array(a)
+                            alpha_array[black_mask] = 0  # 将黑色像素设置为透明
+                            img.putalpha(Image.fromarray(alpha_array, mode='L'))
+                        else:
+                            # 其他情况，使用第一个波段
+                            data_norm = ((data_for_webp[0] - np.nanmin(data_for_webp[0])) / 
+                                        (np.nanmax(data_for_webp[0]) - np.nanmin(data_for_webp[0])) * 255)
+                            data_norm = np.nan_to_num(data_norm, nan=0).astype(np.uint8)
+                            # 创建RGBA图像，设置透明背景
+                            img = Image.fromarray(data_norm, mode='L').convert('RGBA')
+                            # 将0值（原NaN值）设置为完全透明
+                            alpha_channel = np.where(data_norm == 0, 0, 255).astype(np.uint8)
+                            img.putalpha(Image.fromarray(alpha_channel, mode='L'))
+                        
+                        # 保存WEBP文件
+                        # 检查图像尺寸是否超过WebP限制
+                        max_webp_size = 16383
+                        img_width, img_height = img.size
+                        
+                        if img_width > max_webp_size or img_height > max_webp_size:
+                            # 计算缩放比例，确保两个维度都小于限制
+                            scale = min(max_webp_size / img_width, max_webp_size / img_height)
+                            new_width = int(img_width * scale)
+                            new_height = int(img_height * scale)
+                            print(f"    ⚠️ 图像尺寸({img_width}x{img_height})超过WebP限制，缩放到{new_width}x{new_height}")
+                            img = img.resize((new_width, new_height), Image.Resampling.BILINEAR)
+                        
+                        img.save(webp_output_path, format='WEBP', lossless=True)
+                        print(f"    ✅ 保存WEBP图像到: {webp_output_path}")
                     
-                    print(f"  成功重采样{name}文件到: {resampled_file_path}")
+                    print(f"  成功处理{name}文件并保存为WEBP格式")
                 except Exception as e:
-                    print(f"  重采样{name}文件时出错: {str(e)}")
+                    print(f"  处理{name}文件时出错: {str(e)}")
                     import traceback
                     traceback.print_exc()
                     continue
             
-            print(f"成功完成所有TIFF文件的重采样，结果保存在: {resampled_output_dir}")
+            print(f"成功完成所有TIFF文件的处理，结果保存在: {resampled_output_dir}")
         else:
-            print("未找到任何需要重采样的TIFF文件，跳过重采样步骤")
+            print("未找到任何需要处理的TIFF文件，跳过处理步骤")
         
         # 任务2: 按shp将rgb进行图像切割 (如果存在rgb文件)
-        has_rgb = any(name == 'rgb' for name, _ in existing_tif_files)
-        if has_rgb:
-            print("开始按shp切割RGB图像...")
-            rgb_output_dir = Path(output_base_dir).parent / 'tiles'
-            create_dir_if_not_exists(rgb_output_dir)
+        if 'cut' in tasks:
+            has_rgb = any(name == 'rgb' for name, _ in existing_tif_files)
+            if has_rgb:
+                print("开始按shp切割RGB图像...")
+                rgb_output_dir = Path(output_base_dir).parent / 'tiles'
+                create_dir_if_not_exists(rgb_output_dir)
+                
+                # 初始化只包含RGB的分析器
+                rgb_analyzer = MultiRasterAnalyzer(shp_path, [('rgb', os.path.join(data_folder, 'rgb.tif'))])
+                
+                for tile_id, tile_data in rgb_analyzer.iterate_tiles():
+                    # 构建输出文件路径
+                    output_path = os.path.join(rgb_output_dir, str(tile_id), f"{folder_name}.png")
+                    create_dir_if_not_exists(os.path.join(rgb_output_dir, str(tile_id)))
+                    
+                    # 获取RGB数据并转换为PIL格式
+                    # 数据格式为 (bands, height, width)，实际是4波段(RGBA)
+                    rgb_data = tile_data['rgb']
+                    
+                    # 数据已经是uint8类型，值范围在0-255之间，不需要归一化
+                    # 只取前3个波段(RGB)，忽略Alpha通道
+                    rgb_bands = rgb_data[:3, :, :]  # 取前3个波段
+                    
+                    # 转换形状从 (bands, height, width) 到 (height, width, bands)
+                    rgb_image = np.transpose(rgb_bands, (1, 2, 0))
+                    
+                    # 创建PIL图像并设置透明背景
+                    img = Image.fromarray(rgb_image, mode='RGB').convert('RGBA')
+                    # 检测黑色像素（所有通道都为0）并设置为透明
+                    r, g, b, a = img.split()
+                    black_mask = (np.array(r) == 0) & (np.array(g) == 0) & (np.array(b) == 0)
+                    alpha_array = np.array(a)
+                    alpha_array[black_mask] = 0  # 将黑色像素设置为透明
+                    img.putalpha(Image.fromarray(alpha_array, mode='L'))
+                    img.save(output_path, format='PNG', lossless=True)
+                    # print(f"成功将RGB图像按shp切割到: {rgb_output_dir} (PNG格式)")
             
-            # 初始化只包含RGB的分析器
-            rgb_analyzer = MultiRasterAnalyzer(shp_path, [('rgb', os.path.join(data_folder, 'rgb.tif'))])
-            
-            for tile_id, tile_data in rgb_analyzer.iterate_tiles():
-                # 构建输出文件路径
-                output_path = os.path.join(rgb_output_dir, str(tile_id), f"{folder_name}.png")
-                create_dir_if_not_exists(os.path.join(rgb_output_dir, str(tile_id)))
-                
-                # 获取RGB数据并转换为PIL格式
-                # 数据格式为 (bands, height, width)，实际是4波段(RGBA)
-                rgb_data = tile_data['rgb']
-                
-                # 数据已经是uint8类型，值范围在0-255之间，不需要归一化
-                # 只取前3个波段(RGB)，忽略Alpha通道
-                rgb_bands = rgb_data[:3, :, :]  # 取前3个波段
-                
-                # 转换形状从 (bands, height, width) 到 (height, width, bands)
-                rgb_image = np.transpose(rgb_bands, (1, 2, 0))
-                
-                # 创建PIL图像并设置透明背景
-                img = Image.fromarray(rgb_image, mode='RGB').convert('RGBA')
-                # 检测黑色像素（所有通道都为0）并设置为透明
-                r, g, b, a = img.split()
-                black_mask = (np.array(r) == 0) & (np.array(g) == 0) & (np.array(b) == 0)
-                alpha_array = np.array(a)
-                alpha_array[black_mask] = 0  # 将黑色像素设置为透明
-                img.putalpha(Image.fromarray(alpha_array, mode='L'))
-                img.save(output_path)
-            print(f"成功将RGB图像按shp切割到: {rgb_output_dir} (PNG格式)")
-        
         # 任务3: 计算指数并输出result_index.shp
         # 初始化分析器
-        has_required_bands = all(band in [name for name, _ in existing_tif_files] for band in ['red', 'nir', 'green'])
+        if 'calculate' in tasks:
+            has_required_bands = all(band in [name for name, _ in existing_tif_files] for band in ['red', 'nir', 'green'])
 
-        if not has_required_bands:
-            print("警告: 缺少计算NDVI所需的red和nir波段，无法计算这些指数")
-        else:    
-            index_tif_files = [item for item in existing_tif_files if item[0] in ['red', 'green', 'nir']]
-            analyzer_ms = MultiRasterAnalyzer(shp_path, index_tif_files)
-        
-        has_rgb_band = all(band in [name for name, _ in existing_tif_files] for band in ['rgb'])
-        if not has_rgb_band:
-            print("警告: 缺少计算RGB波段，无法计算这些指数")
-        else:
-            analyzer_rgb = MultiRasterAnalyzer(shp_path, [item for item in existing_tif_files if item[0] == 'rgb'])
-
-        print(f"成功加载 {len(index_tif_files)+(1 if has_rgb_band else 0)} 个栅格文件和 1 个shapefile")
-        print("开始计算指数并生成result_index.shp...")
-        results = []
-        
-        iterator = {}
-
-        if has_required_bands:
-            for tile_id, tile_data in analyzer_ms.iterate_tiles():
-                iterator[tile_id] = tile_data
-
-        if has_rgb_band:
-            for tile_id, tile_data in analyzer_rgb.iterate_tiles():
-                if tile_id not in iterator:
-                    iterator[tile_id] = {}
-                iterator[tile_id]['rgb'] = tile_data['rgb']
-        
-        
-        for tile_id, tile_data in iterator.items():
-            print(f"处理区块: {tile_id}")
-            result = {'FID': tile_id}
+            if not has_required_bands:
+                print("警告: 缺少计算NDVI所需的red和nir波段，无法计算这些指数")
+            else:    
+                index_tif_files = [item for item in existing_tif_files if item[0] in ['red', 'green', 'nir']]
+                analyzer_ms = MultiRasterAnalyzer(shp_path, index_tif_files)
             
+            has_rgb_band = all(band in [name for name, _ in existing_tif_files] for band in ['rgb'])
+            if not has_rgb_band:
+                print("警告: 缺少计算RGB波段，无法计算这些指数")
+            else:
+                analyzer_rgb = MultiRasterAnalyzer(shp_path, [item for item in existing_tif_files if item[0] == 'rgb'])
+
+            print(f"成功加载 {len(index_tif_files)+(1 if has_rgb_band else 0)} 个栅格文件和 1 个shapefile")
+            print("开始计算指数并生成result_index.shp...")
+            results = []
+            
+            iterator = {}
+
             if has_required_bands:
-                red = tile_data['red']
-                green = tile_data['green']
-                nir = tile_data['nir']
-                
-                # 计算NDVI
-                with np.errstate(divide='ignore', invalid='ignore'):
-                    ndvi = (nir - red) / (nir + red)
-                    # # 计算OSAVI (优化土壤调整植被指数)
-                    # osavi = (1 + 0.16) * (nir - red) / (nir + red + 0.16)
-                    # gndvi = (nir - green) / (nir + green)
-                    
-                # 替换NaN和无穷大值
-                ndvi = np.nan_to_num(ndvi, nan=0.0, posinf=1.0, neginf=-1.0)
-                # osavi = np.nan_to_num(osavi, nan=0.0, posinf=1.0, neginf=-1.0)
-                # gndvi = np.nan_to_num(gndvi, nan=0.0, posinf=1.0, neginf=-1.0)
-                
-                # 计算NDVI的均值和变异系数
-                ndvi_mean = np.nanmean(ndvi)
-                if ndvi_mean == 0:
-                    ndvi_cv = 0
-                else:
-                    ndvi_cv = np.nanstd(ndvi) / ndvi_mean
-                
-                # # 计算OSAVI的均值和变异系数
-                # osavi_mean = np.nanmean(osavi)
-                # if osavi_mean == 0:
-                #     osavi_cv = 0
-                # else:
-                #     osavi_cv = np.nanstd(osavi) / osavi_mean
+                for tile_id, tile_data in analyzer_ms.iterate_tiles():
+                    iterator[tile_id] = tile_data
 
-                # # 计算GNDVI的均值和变异系数
-                # gndvi_mean = np.nanmean(gndvi)
-                # if gndvi_mean == 0:
-                #     gndvi_cv = 0
-                # else:
-                #     gndvi_cv = np.nanstd(gndvi) / gndvi_mean
-                
-                # 添加到结果
-                result['ndvi'] = ndvi_mean
-                result['ndvi_cv'] = ndvi_cv
-                result['lai'] = ndvi_mean * 10
-                result['lai_cv'] = ndvi_cv * 10
-
-                # result['osavi'] = osavi_mean
-                # result['osavi_cv'] = osavi_cv
-                # result['gndvi'] = gndvi_mean
-                # result['gndvi_cv'] = gndvi_cv
-            
-            # 计算超绿指数EXG
             if has_rgb_band:
-                rgb_data = tile_data['rgb']
-                if len(rgb_data.shape) >= 3 and rgb_data.shape[0] >= 3:
-                    # 假设RGB通道顺序为: 红(0), 绿(1), 蓝(2)
-                    rgb_r = rgb_data[0, :, :]
-                    rgb_g = rgb_data[1, :, :]
-                    rgb_b = rgb_data[2, :, :]
-                    
-                    # 计算超绿指数EXG
-                    exg = 2 * rgb_g - rgb_r - rgb_b
-                    exg_mean = np.nanmean(exg)
-                    result['exg'] = exg_mean
+                for tile_id, tile_data in analyzer_rgb.iterate_tiles():
+                    if tile_id not in iterator:
+                        iterator[tile_id] = {}
+                    iterator[tile_id]['rgb'] = tile_data['rgb']
             
-            results.append(result)
-        
-        # 导出结果到geojson
-        result_geojson_path = os.path.join(output_base_dir, 'result_index.geojson')
-        analyzer_rgb.export_results_to_geojson(results, result_geojson_path)
-        print(f"成功导出结果到: {result_geojson_path}")
+            
+            for tile_id, tile_data in iterator.items():
+                # print(f"处理区块: {tile_id}")
+                result = {'FID': tile_id}
+
+                
+                if has_required_bands:
+                    red = tile_data['red']
+                    green = tile_data['green']
+                    nir = tile_data['nir']
+                    
+                    # 计算NDVI
+                    with np.errstate(divide='ignore', invalid='ignore'):
+                        ndvi = (nir - red) / (nir + red)
+                        # # 计算OSAVI (优化土壤调整植被指数)
+                        # osavi = (1 + 0.16) * (nir - red) / (nir + red + 0.16)
+                        # gndvi = (nir - green) / (nir + green)
+                        
+                    # 替换NaN和无穷大值
+                    ndvi = np.nan_to_num(ndvi, nan=0.0, posinf=1.0, neginf=-1.0)
+                    # osavi = np.nan_to_num(osavi, nan=0.0, posinf=1.0, neginf=-1.0)
+                    # gndvi = np.nan_to_num(gndvi, nan=0.0, posinf=1.0, neginf=-1.0)
+                    
+                    # 计算NDVI的均值和变异系数
+                    ndvi_mean = np.nanmean(ndvi)
+                    if ndvi_mean == 0:
+                        ndvi_cv = 0
+                    else:
+                        ndvi_cv = np.nanstd(ndvi) / ndvi_mean
+                    
+                    # # 计算OSAVI的均值和变异系数
+                    # osavi_mean = np.nanmean(osavi)
+                    # if osavi_mean == 0:
+                    #     osavi_cv = 0
+                    # else:
+                    #     osavi_cv = np.nanstd(osavi) / osavi_mean
+
+                    # # 计算GNDVI的均值和变异系数
+                    # gndvi_mean = np.nanmean(gndvi)
+                    # if gndvi_mean == 0:
+                    #     gndvi_cv = 0
+                    # else:
+                    #     gndvi_cv = np.nanstd(gndvi) / gndvi_mean
+                    
+                    # 添加到结果
+                    result['ndvi'] = ndvi_mean
+                    result['ndvi_cv'] = ndvi_cv
+                    result['lai'] = ndvi_mean * 10
+                    result['lai_cv'] = ndvi_cv * 10
+
+                    # result['osavi'] = osavi_mean
+                    # result['osavi_cv'] = osavi_cv
+                    # result['gndvi'] = gndvi_mean
+                    # result['gndvi_cv'] = gndvi_cv
+                
+                # 计算超绿指数EXG
+                if has_rgb_band:
+                    rgb_data = tile_data['rgb']
+                    if len(rgb_data.shape) >= 3 and rgb_data.shape[0] >= 3:
+                        # 假设RGB通道顺序为: 红(0), 绿(1), 蓝(2)
+                        rgb_r = rgb_data[0, :, :]
+                        rgb_g = rgb_data[1, :, :]
+                        rgb_b = rgb_data[2, :, :]
+                        
+                        # 计算超绿指数EXG
+                        exg = 2 * rgb_g - rgb_r - rgb_b
+                        exg_mean = np.nanmean(exg)
+                        result['exg'] = exg_mean
+                
+                results.append(result)
+            
+            # 导出结果到geojson
+            result_geojson_path = os.path.join(output_base_dir, 'result_index.geojson')
+            analyzer_rgb.export_results_to_geojson(results, result_geojson_path)
+            print(f"成功导出结果到: {result_geojson_path}")
         
         return True
     except Exception as e:
@@ -347,9 +379,22 @@ def process_data_folder(data_folder, folder_name, output_base_dir=None):
         return False
 
 
-def batch_process_folders(root_folder = "2025丹东629", output_root_dir="2025dandong629"):
-    """批量处理根文件夹下的所有子文件夹"""
+def batch_process_folders(root_folder = "2025丹东629", output_root_dir="2025dandong629", tasks=None):
+    """批量处理根文件夹下的所有子文件夹
+    
+    参数:
+        root_folder: 输入根文件夹路径
+        output_root_dir: 输出根目录
+        tasks: 要执行的任务列表，可选值: ['resample', 'cut', 'calculate']
+               如果为None，则执行所有任务
+    """
     print(f"开始批量处理文件夹: {root_folder}")
+    
+    # 如果未指定任务，则执行所有任务
+    if tasks is None:
+        tasks = ['resample', 'cut', 'calculate']
+    
+    print(f"将执行任务: {', '.join(tasks)}")
     
     # 遍历根文件夹下的所有子文件夹
     for folder_name in os.listdir(root_folder):
@@ -367,13 +412,14 @@ def batch_process_folders(root_folder = "2025丹东629", output_root_dir="2025da
             create_dir_if_not_exists(current_output_dir)
         
         # 处理当前文件夹
-        process_data_folder(folder_path, folder_name, current_output_dir)
+        process_data_folder(folder_path, folder_name, current_output_dir, tasks)
     
     print("批量处理完成")
 
 
 if __name__ == '__main__':
+
+    tasks = ['resample', 'cut', 'calculate']
     
-    # 批量处理文件夹
-    batch_process_folders("input/2024苏家屯", "output/2024sujiatun")
-    batch_process_folders("input/2025丹东629", "output/2025dandong629")
+    batch_process_folders(root_folder = "./input/2025丹东629", output_root_dir="./output/2025dandong629", tasks=tasks)
+    batch_process_folders(root_folder = "./input/2024苏家屯", output_root_dir="./output/2024sujiatun", tasks=tasks)
